@@ -1,77 +1,61 @@
-# School Admission Management System
-#   docker compose up --build            -> frontend :5173, backend :8080, PostgreSQL :5432
-#   docker compose --profile multi up -d -> additionally starts a SECOND backend instance on :8081
-#                                           (same database) to demonstrate multi-instance safety.
-
-x-backend-env: &backend-env
-  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
-  ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-school_admission};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change_me};Maximum Pool Size=${DB_POOL_SIZE:-60}"
-  HOLD_DURATION_SECONDS: ${HOLD_DURATION_SECONDS:-600}
-  Jwt__Key: ${JWT_KEY:-change-this-development-jwt-signing-key-at-least-32-chars}
-  Admin__Username: ${ADMIN_USERNAME:-admin}
-  Admin__Password: ${ADMIN_PASSWORD:-Admin@12345}
-  Admission__FeeAmount: ${ADMISSION_FEE:-5000}
-  Worker__IntervalSeconds: ${EXPIRATION_INTERVAL_SECONDS:-5}
-  Seed__DemoData: ${SEED_DEMO_DATA:-true}
-
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
-    container_name: school-admission-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-school_admission}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
-    command: ["postgres", "-c", "max_connections=200"]
-    ports:
-      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-school_admission}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-school_admission}"]
       interval: 5s
       timeout: 5s
       retries: 20
+    # Not published to the host by default (only the backend needs it).
+    # Uncomment to inspect the DB from your LAN / a GUI client:
+    # ports:
+    #   - "${DB_BIND:-0.0.0.0}:${DB_PORT:-5432}:5432"
 
   backend:
     build:
       context: ./backend
-    image: school-admission-backend:latest
-    container_name: school-admission-backend
+      dockerfile: Dockerfile
     restart: unless-stopped
-    environment: *backend-env
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
-    ports:
-      - "8080:8080"
-
-  backend2:
-    image: school-admission-backend:latest
-    container_name: school-admission-backend2
-    restart: unless-stopped
-    profiles: ["multi"]
     environment:
-      <<: *backend-env
-      Seed__DemoData: "false"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      backend:
-        condition: service_started
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: >-
+        Host=db;Port=5432;Database=${POSTGRES_DB:-school_admission};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change_me};Maximum Pool Size=60
+      Jwt__Key: ${JWT_KEY:-dev-only-change-me-please-use-a-long-random-secret-key-32+}
+      Jwt__Issuer: ${JWT_ISSUER:-school-admission}
+      Jwt__Audience: ${JWT_AUDIENCE:-school-admission-admin}
+      Admin__Username: ${ADMIN_USERNAME:-admin}
+      Admin__Password: ${ADMIN_PASSWORD:-Admin@12345}
+      Admission__FeeAmount: ${ADMISSION_FEE:-5000}
+      HOLD_DURATION_SECONDS: ${HOLD_DURATION_SECONDS:-600}
+      Worker__Enabled: ${WORKER_ENABLED:-true}
+      Worker__IntervalSeconds: ${WORKER_INTERVAL_SECONDS:-5}
+      Seed__DemoData: ${SEED_DEMO_DATA:-false}
+    expose:
+      - "8080"                       # reachable from nginx as http://backend:8080
     ports:
-      - "8081:8080"
+      # Optional direct API access from LAN. Remove if you only use the frontend.
+      - "${BACKEND_BIND:-0.0.0.0}:${BACKEND_PORT:-8080}:8080"
 
   frontend:
     build:
       context: ./frontend
-    container_name: school-admission-frontend
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      - "5173:80"
+      - "${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-80}:80"
 
 volumes:
-  postgres_data:
+  pgdata:
