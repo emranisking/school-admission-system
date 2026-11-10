@@ -13,10 +13,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    # Not published to the host by default (only the backend needs it).
-    # Uncomment to inspect the DB from your LAN / a GUI client:
-    # ports:
-    #   - "${DB_BIND:-0.0.0.0}:${DB_PORT:-5432}:5432"
+    ports:
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"
 
   backend:
     build:
@@ -42,9 +40,8 @@ services:
       Worker__IntervalSeconds: ${WORKER_INTERVAL_SECONDS:-5}
       Seed__DemoData: ${SEED_DEMO_DATA:-false}
     expose:
-      - "8080"                       # reachable from nginx as http://backend:8080
+      - "8080"
     ports:
-      # Optional direct API access from LAN. Remove if you only use the frontend.
       - "${BACKEND_BIND:-0.0.0.0}:${BACKEND_PORT:-8080}:8080"
 
   frontend:
