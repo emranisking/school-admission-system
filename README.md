@@ -16,7 +16,7 @@ docker compose up --build
 
 | URL | What |
 | --- | --- |
-| http://localhost:5173 | Web app (student portal at `/`, admin at `/admin/login`) |
+| http://localhost:80 | To access frontend Web app (student portal at `/`, admin at `/admin/login`) |
 | http://localhost:8080 | Backend API directly (all endpoints from the assignment) |
 | localhost:5432 | PostgreSQL (`postgres` / `change_me`, db `school_admission`) |
 
